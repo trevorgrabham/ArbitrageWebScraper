@@ -6,63 +6,6 @@ import (
 	"sync"
 )
 
-type Name struct {
-	FirstName 		string
-	LastName 			string
-}
-
-func (n Name) SameAs(other Name) (formatted Name) {
-	switch {
-	// Just a single name
-	case n.FirstName == "":
-		if n.LastName == other.LastName {
-			return other
-		}
-	// Just a single name
-	case other.FirstName == "":
-		if n.LastName == other.LastName {
-			return n
-		}
-	// Just a first initial
-	case len(n.FirstName) < 3:
-		if n.LastName == other.LastName && n.FirstName[0] == other.FirstName[0] {
-			return other
-		}
-	// Just a first initial
-	case len(other.FirstName) < 3:
-		if n.LastName == other.LastName && n.FirstName[0] == other.FirstName[0] {
-			return n
-		}
-	// Just a last initial
-	case len(n.LastName) < 3:
-		if n.FirstName == other.FirstName && n.LastName[0] == other.LastName[0] {
-			return other
-		}
-	// Just a last initial
-	case len(other.LastName) < 3:
-		if n.FirstName == other.FirstName && n.LastName[0] == other.LastName[0] {
-			return n
-		}
-	}
-	return Name{}
-}
-
-func NewName(name string) Name {
-	mySplitName := strings.Split(name, " ")
-	var myName Name
-	if len(mySplitName) > 1 {
-		myName.FirstName = mySplitName[0]
-		myName.LastName = strings.Join(mySplitName[1:], " ")
-	} else {
-		myName.LastName = name
-	}
-	return myName
-}
-
-func (n Name) String() string {
-	if n.FirstName == "" {return n.LastName}
-	return fmt.Sprintf("%s %s", n.FirstName, n.LastName)
-}
 
 type Fighter struct {
 	Name     
@@ -101,74 +44,89 @@ func (f *ThreadSafeFighters) String() string {
 	return valueString.String()
 }
 
-func (f *ThreadSafeFighters) exists(name, opponent Name) (exists, matchedOpponent bool, fighter *Fighter) {
+func (f *ThreadSafeFighters) exists(fighter, opponent *Fighter) (fighterA, fighterB *Fighter) {
 	if DEBUG {
-		fmt.Printf("Searching if %s or %s exist\n\n", name, opponent)
+		fmt.Printf("Searching if %s or %s exist\n", fighter.Name, opponent.Name)
 	}
 	var defaultName = Name{}
 	f.Lock.Lock()
 	defer f.Lock.Unlock()
-	for _, fighter := range f.Fighters {
-		if n := fighter.SameAs(name); n != defaultName {
+	for _, otherFighter := range f.Fighters {
+		if n := fighter.Name.SameAs(otherFighter.Name); n != defaultName {
 			if DEBUG {
-				fmt.Printf("Matched %s to %s\n", name, fighter.Name)
+				fmt.Printf("Matched %s to %s\n", fighter.Name, otherFighter.Name)
 			}
-			if n == fighter.Name {
+			if n == otherFighter.Name {
 				if DEBUG {
 					fmt.Println("Keeping original name")
 				}
-				return true, false, fighter
+				fighterA = otherFighter
+				fighter.Name = otherFighter.Name
+				continue
 			}
 			if DEBUG {
-				fmt.Printf("Changing name to %s\n", name)
+				fmt.Printf("Changing name to %s\n", n)
 			}
 			newFighter := &Fighter{
 				Name: 			n,
-				Sites: 			fighter.Sites,
-				BestSite: 	fighter.BestSite,
+				Sites: 			otherFighter.Sites,
+				BestSite: 	otherFighter.BestSite,
 			}
-			delete(f.Fighters, fighter.Name)
+			delete(f.Fighters, otherFighter.Name)
 			f.Fighters[n] = newFighter
-			return true, false, fighter
+			fighterA = newFighter
+			continue
 		} 
-		if n := fighter.SameAs(opponent); n != defaultName {
+		if n := opponent.Name.SameAs(otherFighter.Name); n != defaultName {
 			if DEBUG {
-				fmt.Printf("Matched %s to %s\n", opponent, fighter.Name)
+				fmt.Printf("Matched %s to %s\n", opponent, otherFighter.Name)
 			}
-			if n == fighter.Name {
+			if n == otherFighter.Name {
 				if DEBUG {
 					fmt.Println("Keeping original name")
 				}
-				return true, false, fighter
+				fighterB = otherFighter
+				opponent.Name = n
+				continue
 			}
 			if DEBUG {
-				fmt.Printf("Changing name to %s\n", opponent)
+				fmt.Printf("Changing name to %s\n", opponent.Name)
 			}
 			newFighter := &Fighter{
 				Name: 			n,
-				Sites: 			fighter.Sites,
-				BestSite: 	fighter.BestSite,
+				Sites: 			otherFighter.Sites,
+				BestSite: 	otherFighter.BestSite,
 			}
-			delete(f.Fighters, fighter.Name)
+			delete(f.Fighters, otherFighter.Name)
 			f.Fighters[n] = newFighter
-			return true, false, fighter
+			fighterB = newFighter
 		}
 	}
 	if DEBUG {
-		fmt.Printf("No match found for %s or %s\n", name, opponent)
+		if fighterA == nil {
+			fmt.Printf("No match for %s\n", fighter.Name)
+		}
+		if fighterB == nil {
+			fmt.Printf("No match for %s\n", opponent.Name)
+		}
+		if fighterA != nil && fighterB != nil {
+			fmt.Printf("Matched (%s, %s) to (%s, %s)\n", fighter.Name, opponent.Name, fighterA.Name, fighterB.Name)
+		}
 	}
-	return false, false, nil
+	return
 }
 
-func (f *ThreadSafeFighters) AddFighters(fighter, opponent *Fighter) (alreadyExisted, matchedOpponent bool, fighterRef *Fighter) {
-	if exists, isOp, fighterRef := f.exists(fighter.Name, opponent.Name); exists {
-		return exists, isOp, fighterRef
+func (f *ThreadSafeFighters) AddFighters(fighter, opponent *Fighter) (fighterA, fighterB *Fighter) {
+	if fighterA, fighterB = f.exists(fighter, opponent); fighterA != nil && fighterB != nil {
+		f.AddOdds(fighterA.Name, fighter.BestSite)
+		f.AddOdds(fighterB.Name, opponent.BestSite)
+		return fighterA, fighterB
 	}
 	f.Lock.Lock()
 	f.Fighters[fighter.Name] = fighter
 	f.Fighters[opponent.Name] = opponent
 	f.Lock.Unlock()
-	return false, false, nil
+	return fighter, opponent
 }
 
 func (f *ThreadSafeFighters) AddOdds(name Name, site SiteData) (existed bool) {
@@ -187,4 +145,22 @@ func (f *ThreadSafeFighters) BestSite(name Name) SiteData {
 	best := f.Fighters[name].BestSite
 	f.Lock.Unlock()
 	return best
+}
+
+func (f *ThreadSafeFighters) FighterHasOdds(name Name, site SiteData) bool {
+	f.Lock.Lock()
+	defer f.Lock.Unlock()
+	for _, s := range f.Fighters[name].Sites {
+		if s.Site == site.Site { return true }
+	}
+	return false
+}
+
+func (f *ThreadSafeFighters) GetFighter(name Name) *Fighter {
+	defaultName := Name{}
+	if name == defaultName { return nil }
+	f.Lock.Lock()
+	fighter := f.Fighters[name]
+	f.Lock.Unlock()
+	return fighter
 }

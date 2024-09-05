@@ -23,7 +23,7 @@ func FindArbitrageOpportunities(fights *ThreadSafeFights, fighters *ThreadSafeFi
 		}
 		if bookOdds < 1.0 {
 			bet := Bet{
-				Fighters: [...]string{fight.FighterA.Name.String(), fight.FighterB.Name.String()}, 
+				// Fighters: [...]string{fight.FighterA.Name.String(), fight.FighterB.Name.String()}, 
 				Sites: [...]string{fight.FighterA.BestSite.Site, fight.FighterB.BestSite.Site}, 
 				Amounts: [...]float64{(maxBet*impliedOdds[0])/bookOdds, (maxBet*impliedOdds[1])/bookOdds},
 				Profit: fight.FighterA.BestSite.Odds * (maxBet*impliedOdds[0])/bookOdds - maxBet,

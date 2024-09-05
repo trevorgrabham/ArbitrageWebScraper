@@ -3,19 +3,17 @@ package scraping
 import (
 	"context"
 	"examples/webscraper/util"
-	"log"
+	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
-	proto "github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/runtime"
 	cdp "github.com/chromedp/chromedp"
 )
 
 func ScrapeDraftKings(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, wg *sync.WaitGroup) {
+	// Setup the driver
 	ctx, cancel := cdp.NewExecAllocator(
 		context.Background(),
 		cdp.ExecPath(`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`),
@@ -23,89 +21,78 @@ func ScrapeDraftKings(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFi
 	defer cancel()
 	ctx, cancel = cdp.NewContext(ctx)
 	defer cancel()
-	ctx, cancel = context.WithTimeout(ctx, time.Second * 20)
+	ctx, cancel = context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
 
+	var numFighters int 
 	tasks := cdp.Tasks{
 		cdp.Navigate(Urls["DraftKings"]),
-		cdp.WaitReady(`a.event-cell-link`),
-	}
-	var fighterNames []string
-	var fighterOdds []float64
-
-	// Get the names for the fighters
-	// Fights are fighters[i] vs fighters[i+1]
-	getName := func(ctx context.Context, id runtime.ExecutionContextID, nodes ...*proto.Node) error {
-		for _, node := range nodes {
-			fighterNames = append(fighterNames, strings.TrimSpace(node.Children[0].NodeValue))
-		}
-		return nil
-	}
-	tasks = append(tasks, cdp.QueryAfter(`div.event-cell__name-text`, getName, cdp.ByQueryAll))
-
-	// Get the odds
-	// The odds map so that fighter[i] has odds[i]
-	getOdds := func(ctx context.Context, id runtime.ExecutionContextID, nodes ...*proto.Node) error {
-		for _, node := range nodes {
-			var americanOddsValue int
-			var err error
-			americanOdds := node.Children[0].NodeValue
-			switch r, size := utf8.DecodeRune([]byte(americanOdds)); r {
-			case '+':
-				americanOddsValue, err = strconv.Atoi(americanOdds[size:])
+		cdp.WaitReady(`//tr/td[3]/div/div/div/div/div[2]/span`),
+		cdp.Evaluate(`document.querySelectorAll('span.sportsbook-odds.no-margin').length`, &numFighters),
+		cdp.ActionFunc(func(ctx context.Context) error {
+			for i := 0; i < numFighters-1; i += 2 {
+				var nameA, nameB, oddsStringA, oddsStringB string
+				err := cdp.Evaluate(fmt.Sprintf(`document.querySelectorAll('div.event-cell__name-text')[%d].textContent`, i), &nameA).Do(ctx)
 				if err != nil { return err }
-				fighterOdds = append(fighterOdds, float64(americanOddsValue)/100.0+1.0)
-			default:
-				americanOddsValue, err = strconv.Atoi(americanOdds[size:])
+				err = cdp.Evaluate(fmt.Sprintf(`document.querySelectorAll('span.sportsbook-odds.no-margin')[%d].textContent`, i), &oddsStringA).Do(ctx)
 				if err != nil { return err }
-				fighterOdds = append(fighterOdds, 100.0/float64(americanOddsValue)+1.0)
+				err = cdp.Evaluate(fmt.Sprintf(`document.querySelectorAll('div.event-cell__name-text')[%d].textContent`, i+1), &nameB).Do(ctx)
+				if err != nil { return err }
+				err = cdp.Evaluate(fmt.Sprintf(`document.querySelectorAll('span.sportsbook-odds.no-margin')[%d].textContent`, i+1), &oddsStringB).Do(ctx)
+				if err != nil { return err }
+				var oddsA, oddsB float64
+				switch sign, size := utf8.DecodeRuneInString(oddsStringA); {
+				case sign == '+':
+					oddsA, err = strconv.ParseFloat(oddsStringA[size:], 64)
+					oddsA = americanToDecimalOdds(true, oddsA)
+					if err != nil { return err }
+				default:
+					oddsA, err = strconv.ParseFloat(oddsStringA[size:], 64)
+					oddsA = americanToDecimalOdds(false, oddsA)
+					if err != nil { return err }
+				}
+				switch sign, size := utf8.DecodeRuneInString(oddsStringB); {
+				case sign == '+':
+					oddsB, err = strconv.ParseFloat(oddsStringB[size:], 64)
+					oddsB = americanToDecimalOdds(true, oddsB)
+					if err != nil { return err }
+				default:
+					oddsB, err = strconv.ParseFloat(oddsStringB[size:], 64)
+					oddsB = americanToDecimalOdds(false, oddsB)
+					if err != nil { return err }
+				}
+				fighterA := &util.Fighter{
+					Name: util.NewName(nameA), 
+					Sites: []util.SiteData{{Site: "DraftKings", Odds: oddsA }},
+					BestSite: util.SiteData{Site: "DraftKings", Odds: oddsA }}
+				fighterB := &util.Fighter{
+					Name: util.NewName(nameB), 
+					Sites: []util.SiteData{{Site: "DraftKings", Odds: oddsB }},
+					BestSite: util.SiteData{Site: "DraftKings", Odds: oddsB }}
+				fighters.AddFighters(fighterA, fighterB)
+				fights.AddFight(&util.Fight{FighterA: fighterA, FighterB: fighterB})
 			}
-		}
-		return nil
-	}
-	tasks = append(tasks, cdp.QueryAfter(`span.sportsbook-odds`, getOdds, cdp.ByQueryAll))
-
-	// Run the tasks
-	err := cdp.Run(ctx, tasks...)
+			return nil
+		})}
+	
+	err := cdp.Run(ctx, tasks)
 	if ctx.Err() == context.DeadlineExceeded {
+		cancel()
 		ScrapeDraftKings(fights, fighters, wg)
 		return
 	}
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Format the data
-	for i := 0; i < len(fighterNames)-1; i += 2 {
-		// Populate the Fighters
-		site := util.SiteData{Site: "DraftKings", Odds: fighterOdds[i]}
-		fighterA := &util.Fighter{
-			Name:     util.NewName(fighterNames[i]),
-			Sites:    []util.SiteData{site},
-			BestSite: site,
-		}
-		site.Odds = fighterOdds[i+1]
-		fighterB := &util.Fighter{
-			Name:     util.NewName(fighterNames[i+1]),
-			Sites:    []util.SiteData{site},
-			BestSite: site,
-		}
-		if exitsts, isOp, fighter := fighters.AddFighters(fighterA, fighterB); exitsts {
-			if isOp {
-				fighterA = fights.Opponent(fighter)
-				fighterB = fighter
-			} else {
-				fighterA = fighter
-				fighterB = fights.Opponent(fighterA)
-			}
-			fighters.AddOdds(fighterB.Name, site)
-			site.Odds = fighterOdds[i]
-			fighters.AddOdds(fighterA.Name, site)
-		}
-
-		// Populate the Fight
-		fights.AddFight(&util.Fight{FighterA: fighterA, FighterB: fighterB})
-	}
+	if err != nil { panic(err) }
+	
 	cancel()
 	wg.Done()
+}
+
+func americanToDecimalOdds(isPositive bool, american float64) (decimal float64) {
+	switch isPositive {
+	case true:
+		return 1.0 + (american/100.0)
+	case false:
+		return 1.0 + (100.0/american)
+	}
+	return -1
 }

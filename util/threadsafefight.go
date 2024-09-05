@@ -48,14 +48,3 @@ func (f *ThreadSafeFights) AddFight(fight *Fight) (alreadyExists bool) {
 	f.Lock.Unlock()
 	return false
 }
-
-func (f *ThreadSafeFights) Opponent(fighter *Fighter) *Fighter {
-	f.Lock.Lock()
-	defer f.Lock.Unlock()
-	fight := f.Fights[fighter.Name]
-	if fight.FighterA.Name == fighter.Name {
-		return fight.FighterB
-	} else {
-		return fight.FighterA
-	}
-}

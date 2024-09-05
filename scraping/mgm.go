@@ -3,102 +3,76 @@ package scraping
 import (
 	"context"
 	"examples/webscraper/util"
-	"log"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
-	proto "github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/runtime"
 	cdp "github.com/chromedp/chromedp"
 )
 
 func ScrapeMGM(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, wg *sync.WaitGroup) {
 	ctx, cancel := cdp.NewExecAllocator(
-		context.Background(), 
+		context.Background(),
 		cdp.ExecPath(`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`),
 	)
 	defer cancel()
 	ctx, cancel = cdp.NewContext(ctx)
 	defer cancel()
-	ctx, cancel = context.WithTimeout(ctx, time.Second * 20)
+	ctx, cancel = context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
 
-	tasks := cdp.Tasks{}
-	var fighterNames []string
-	var fighterOdds []float64
-
-	tasks = append(tasks, 
+	var numFighters int
+	tasks := cdp.Tasks{
 		cdp.Navigate(Urls["MGM"]),
-		cdp.WaitReady(`div.participant`, cdp.ByQuery),
-		cdp.Sleep(5*time.Second))
+		cdp.WaitReady(`div.participant`),
+		cdp.Sleep(3*time.Second),
+		cdp.Evaluate(`document.querySelectorAll('div.participant').length`, &numFighters),
+		cdp.ActionFunc(func(ctx context.Context) error {
+			for i := 0; i < numFighters-1; i += 2 {
+				var nameAndCountryA, nameAndCountryB, oddsStringA, oddsStringB string 
+				err := cdp.Evaluate(fmt.Sprintf(`document.querySelectorAll('div.participant')[%d].textContent`, i), &nameAndCountryA).Do(ctx)
+				if err != nil { return err }
+				err = cdp.Evaluate(fmt.Sprintf(`document.querySelectorAll('div.participant')[%d].textContent`, i+1), &nameAndCountryB).Do(ctx)
+				if err != nil { return err }
+				err = cdp.Evaluate(fmt.Sprintf(`document.querySelectorAll('span.custom-odds-value-style')[%d].textContent`, i), &oddsStringA).Do(ctx)
+				if err != nil { return err }
+				err = cdp.Evaluate(fmt.Sprintf(`document.querySelectorAll('span.custom-odds-value-style')[%d].textContent`, i+1), &oddsStringB).Do(ctx)
+				if err != nil { return err }
+				nameEndIndexA := strings.LastIndexFunc(nameAndCountryA, unicode.IsLower)
+				if nameEndIndexA < 0 { return fmt.Errorf("could not find where name ended in %s", nameAndCountryA) }
+				nameEndIndexB := strings.LastIndexFunc(nameAndCountryB, unicode.IsLower)
+				if nameEndIndexB < 0 { return fmt.Errorf("could not find where name ended in %s", nameAndCountryB) }
+				oddsA, err := strconv.ParseFloat(oddsStringA, 64)
+				if err != nil { return err }
+				oddsB, err := strconv.ParseFloat(oddsStringB, 64)
+				if err != nil { return err }
+				var nameA, nameB = nameAndCountryA[:nameEndIndexA+1], nameAndCountryB[:nameEndIndexB+1]
+				nameA, nameB = strings.TrimSpace(nameA), strings.TrimSpace(nameB)
+				fighterA := &util.Fighter{
+					Name: util.NewName(nameA),
+					Sites: []util.SiteData{{Site: "MGM", Odds: oddsA}},
+					BestSite: util.SiteData{Site: "MGM", Odds: oddsA}}
+				fighterB := &util.Fighter{
+					Name: util.NewName(nameB),
+					Sites: []util.SiteData{{Site: "MGM", Odds: oddsB}},
+					BestSite: util.SiteData{Site: "MGM", Odds: oddsB}}
+				fighters.AddFighters(fighterA, fighterB)
+				fights.AddFight(&util.Fight{FighterA: fighterA, FighterB: fighterB})
+			}
+			return nil
+		})}
 	
-	// Get fighter names
-	// Fights of form fighterNames[i] vs fighterNames[i+1]
-	getName := func(ctx context.Context, id runtime.ExecutionContextID, nodes ...*proto.Node) error {
-		for _, node := range nodes {
-			fighterNames = append(fighterNames, strings.TrimSpace(node.Children[0].NodeValue))
-		}
-		return nil
-	}
-	tasks = append(tasks, cdp.QueryAfter(`div.participant`, getName, cdp.ByQueryAll, cdp.Populate(2, false), cdp.NodeReady))
-
-	// Get fighter odds 
-	// Fighters of form fighterName[i] has fighterOdds[i]
-	getOdds := func(ctx context.Context, id runtime.ExecutionContextID, nodes ...*proto.Node) error {
-		for _, node := range nodes {
-			odds, err := strconv.ParseFloat(node.Children[0].NodeValue, 64)
-			if err != nil { return err }
-			fighterOdds = append(fighterOdds, odds)
-		}
-		return nil
-	}
-	tasks = append(tasks, cdp.QueryAfter(`span.custom-odds-value-style`, getOdds, cdp.ByQueryAll))
-
-	// Run tasks
-	err := cdp.Run(ctx, tasks...)
+	err := cdp.Run(ctx, tasks)
 	if ctx.Err() == context.DeadlineExceeded {
-		cancel()
+		cancel() 
 		ScrapeMGM(fights, fighters, wg)
 		return
-	} 
-	if err != nil {
-		log.Fatal(err)
 	}
+	if err != nil { panic(err) }
 
-	// Format the data 
-	for i := 0; i < len(fighterNames)-1; i += 2 {
-		// Populate Fighters
-		var fighterA, fighterB *util.Fighter
-		site := util.SiteData{Site: "MGM", Odds: fighterOdds[i]}
-		fighterA = &util.Fighter{
-			Name: 		util.NewName(fighterNames[i]),
-			Sites: 		[]util.SiteData{site},
-			BestSite: site,
-		}
-		site.Odds = fighterOdds[i+1]
-		fighterB = &util.Fighter{
-			Name: 		util.NewName(fighterNames[i+1]),
-			Sites: 		[]util.SiteData{site},
-			BestSite: site,
-		}
-		if exists, isOp, fighter := fighters.AddFighters(fighterA, fighterB); exists {
-			if isOp {
-				fighterA = fights.Opponent(fighter)
-				fighterB = fighter
-			} else {
-				fighterA = fighter 
-				fighterB = fights.Opponent(fighterA)
-			}
-			fighters.AddOdds(fighterB.Name, site)
-			site.Odds = fighterOdds[i]
-			fighters.AddOdds(fighterA.Name, site)
-		}
-
-		// Populate Fight
-		fights.AddFight(&util.Fight{FighterA: fighterA, FighterB: fighterB})
-	}
 	cancel()
 	wg.Done()
 }

@@ -1,5 +1,7 @@
 package util
 
+import "fmt"
+
 const DEBUG = false
 
 type SiteData struct {
@@ -7,3 +9,6 @@ type SiteData struct {
 	Odds float64
 }
 
+func (s SiteData) String() string {
+	return fmt.Sprintf("%f @ %s", s.Odds, s.Site)
+}
