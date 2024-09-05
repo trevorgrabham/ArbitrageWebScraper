@@ -13,7 +13,7 @@ import (
 	cdp "github.com/chromedp/chromedp"
 )
 
-func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, wg *sync.WaitGroup) {
+func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents, wg *sync.WaitGroup) {
 	// Setup driver
 	ctx, cancel := cdp.NewExecAllocator(
 		context.Background(),
@@ -66,6 +66,7 @@ func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFight
 					BestSite: util.SiteData{Site: "PlayNow", Odds: oddsB}}
 				fighters.AddFighters(a, b)
 				fights.AddFight(&util.Fight{FighterA: a, FighterB: b})
+				opponents.AddPairing(a.Name, b.Name)
 			}
 			return nil
 		})}
@@ -74,7 +75,7 @@ func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFight
 	err := cdp.Run(ctx, clickButtons, getFighters)
 	if ctx.Err() == context.DeadlineExceeded {
 		cancel()
-		ScrapePlayNow(fights, fighters, wg)
+		ScrapePlayNow(fights, fighters, opponents, wg)
 		return
 	}
 	if err != nil { panic(err) }

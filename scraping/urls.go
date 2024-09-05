@@ -13,7 +13,7 @@ var Urls = map[string]string{
 	"MGM":        "https://sports.on.betmgm.ca/en/sports/mma-45/betting/usa-9",
 }
 
-var Funcs []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *sync.WaitGroup) = []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *sync.WaitGroup){
+var Funcs []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *util.ThreadSafeOpponents, *sync.WaitGroup) = []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *util.ThreadSafeOpponents, *sync.WaitGroup){
 	ScrapePlayNow,
 	ScrapeDraftKings,
 	ScrapeMGM,

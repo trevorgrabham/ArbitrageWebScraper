@@ -78,12 +78,12 @@ func NewName(name string) Name {
 	return myName
 }
 
-// func (n Name) String() string {
-// 	if n.FirstName == "" {
-// 		return n.LastName
-// 	}
-// 	return fmt.Sprintf("%s %s", n.FirstName, n.LastName)
-// }
+func (n Name) String() string {
+	if n.FirstName == "" {
+		return n.LastName
+	}
+	return fmt.Sprintf("%s %s", n.FirstName, n.LastName)
+}
 
 func distanceBetweenNames(first, second string) (numDiffs int) {
 	if first == second { return 0 }

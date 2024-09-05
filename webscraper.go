@@ -12,17 +12,19 @@ const DEBUG = true
 
 var fights *util.ThreadSafeFights = &util.ThreadSafeFights{}
 var fighters *util.ThreadSafeFighters = &util.ThreadSafeFighters{}
+var opponents *util.ThreadSafeOpponents = &util.ThreadSafeOpponents{}
 
 func init() {
-	fights.Fights = make(map[util.Name]*util.Fight)
+	fights.Fights = make([]*util.Fight, 0)
 	fighters.Fighters = make(map[util.Name]*util.Fighter)
+	opponents.Opponents = make(map[util.Name]util.Name)
 }
 
 func main() {
 	var wg sync.WaitGroup
 	for _, f := range scraping.Funcs {
 		wg.Add(1)
-		go f(fights, fighters, &wg)
+		go f(fights, fighters, opponents, &wg)
 	}
 	wg.Wait()
 

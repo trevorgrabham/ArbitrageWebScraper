@@ -16,7 +16,7 @@ func (f *Fight) String() string {
 }
 
 type ThreadSafeFights struct {
-	Fights map[Name]*Fight
+	Fights []*Fight
 	Lock   sync.Mutex
 }
 
@@ -31,20 +31,10 @@ func (f *ThreadSafeFights) String() string {
 	return valueString.String()
 }
 
-func (f *ThreadSafeFights) exists(name Name) bool {
+func (f *ThreadSafeFights) AddFight(fight *Fight) (err error) {
+	if fight == nil { return fmt.Errorf("addfight(): got nil value") }
 	f.Lock.Lock()
-	_, ok := f.Fights[name]
+	f.Fights = append(f.Fights, fight)
 	f.Lock.Unlock()
-	return ok
-}
-
-func (f *ThreadSafeFights) AddFight(fight *Fight) (alreadyExists bool) {
-	if f.exists(fight.FighterA.Name) && f.exists(fight.FighterB.Name) {
-		return true
-	}
-	f.Lock.Lock()
-	f.Fights[fight.FighterA.Name] = fight
-	f.Fights[fight.FighterB.Name] = fight
-	f.Lock.Unlock()
-	return false
+	return nil
 }
