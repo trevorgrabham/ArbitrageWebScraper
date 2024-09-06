@@ -19,9 +19,17 @@ func init() {
 	opponents.Opponents = make(map[util.Name]util.Name)
 }
 
+var workChan = make(chan bool, 2)
+
 func main() {
+	workChan <- true
+	workChan <- true
 	for _, f := range scraping.Funcs {
-		f(fights, fighters, opponents)
+		<-workChan
+		go f(fights, fighters, opponents, workChan)
+	}
+	for {
+		if len(workChan) == 2 { break }
 	}
 
 	fmt.Println(fights)

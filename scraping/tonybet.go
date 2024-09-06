@@ -12,7 +12,7 @@ import (
 	cdp "github.com/chromedp/chromedp"
 )
 
-func ScrapeTonyBet(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents) {
+func ScrapeTonyBet(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents, workChan chan bool) {
 	// Setup the driver
 	ctx, cancel := cdp.NewExecAllocator(
 		context.Background(),
@@ -76,10 +76,11 @@ func ScrapeTonyBet(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFight
 	err := cdp.Run(ctx, tasks)
 	if ctx.Err() == context.DeadlineExceeded {
 		cancel()
-		ScrapeTonyBet(fights, fighters, opponents)
+		ScrapeTonyBet(fights, fighters, opponents, workChan)
 		return
 	}
 	if err != nil { panic(err) }
 
+	workChan <- true
 	cancel()
 }

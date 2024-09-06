@@ -13,7 +13,7 @@ import (
 	cdp "github.com/chromedp/chromedp"
 )
 
-func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents) {
+func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents, workChan chan bool) {
 	ctx, cancel := cdp.NewExecAllocator(
 		context.Background(),
 		cdp.ExecPath(`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`),
@@ -76,8 +76,10 @@ func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFight
 	err := cdp.Run(ctx, clickButtons, getFighters)
 	if ctx.Err() == context.DeadlineExceeded {
 		cancel()
-		ScrapePlayNow(fights, fighters, opponents)
+		ScrapePlayNow(fights, fighters, opponents, workChan)
 	}
 	if err != nil { panic(err) }
+	
+	workChan <- true
 	cancel()
 }
