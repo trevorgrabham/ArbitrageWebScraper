@@ -2,7 +2,6 @@ package scraping
 
 import (
 	"examples/webscraper/util"
-	"sync"
 )
 
 const DEBUG = true
@@ -12,11 +11,13 @@ var Urls = map[string]string{
 	"DraftKings": "https://sportsbook.draftkings.com/leagues/mma/ufc",
 	"MGM":        "https://sports.on.betmgm.ca/en/sports/mma-45/betting/usa-9",
 	"SportsInteraction": "https://sports.sportsinteraction.com/en-ca/sports/mma-45/betting/usa-9",
+	"TonyBet":	"https://tonybet.com/ca/prematch/mma",
 }
 
-var Funcs []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *util.ThreadSafeOpponents, *sync.WaitGroup) = []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *util.ThreadSafeOpponents, *sync.WaitGroup){
-	// ScrapePlayNow,
-	// ScrapeDraftKings,
-	// ScrapeMGM,
+var Funcs []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *util.ThreadSafeOpponents) = []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *util.ThreadSafeOpponents){
+	ScrapePlayNow,
+	ScrapeDraftKings,
+	ScrapeMGM,
+	ScrapeTonyBet,
 	ScrapeSportsInteraction,
 }

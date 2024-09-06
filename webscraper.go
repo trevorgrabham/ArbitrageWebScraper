@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sync"
 
 	"examples/webscraper/scraping"
 	"examples/webscraper/util"
@@ -21,12 +20,9 @@ func init() {
 }
 
 func main() {
-	var wg sync.WaitGroup
 	for _, f := range scraping.Funcs {
-		wg.Add(1)
-		go f(fights, fighters, opponents, &wg)
+		f(fights, fighters, opponents)
 	}
-	wg.Wait()
 
 	fmt.Println(fights)
 	fmt.Println(fighters)

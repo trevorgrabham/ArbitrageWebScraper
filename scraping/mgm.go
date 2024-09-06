@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
+	"github.com/chromedp/cdproto/network"
 	cdp "github.com/chromedp/chromedp"
 )
 
-func ScrapeMGM(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents, wg *sync.WaitGroup) {
+func ScrapeMGM(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents) {
 	ctx, cancel := cdp.NewExecAllocator(
 		context.Background(),
 		cdp.ExecPath(`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`),
@@ -26,6 +26,8 @@ func ScrapeMGM(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters,
 
 	var numFighters int
 	tasks := cdp.Tasks{
+		network.Enable(),
+		network.SetExtraHTTPHeaders(network.Headers(util.Headers)),
 		cdp.Navigate(Urls["MGM"]),
 		cdp.WaitReady(`div.participant`),
 		cdp.Sleep(3*time.Second),
@@ -69,11 +71,10 @@ func ScrapeMGM(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters,
 	err := cdp.Run(ctx, tasks)
 	if ctx.Err() == context.DeadlineExceeded {
 		cancel() 
-		ScrapeMGM(fights, fighters, opponents, wg)
+		ScrapeMGM(fights, fighters, opponents)
 		return
 	}
 	if err != nil { panic(err) }
 
 	cancel()
-	wg.Done()
 }

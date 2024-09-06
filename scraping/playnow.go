@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
+	"github.com/chromedp/cdproto/network"
 	cdp "github.com/chromedp/chromedp"
 )
 
-func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents, wg *sync.WaitGroup) {
-	// Setup driver
+func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents) {
 	ctx, cancel := cdp.NewExecAllocator(
 		context.Background(),
 		cdp.ExecPath(`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`),
@@ -28,6 +27,8 @@ func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFight
 	var numLoadButtons, numFighters int
 
 	clickButtons := cdp.Tasks{
+		network.Enable(),
+		network.SetExtraHTTPHeaders(network.Headers(util.Headers)),
 		cdp.Navigate(Urls["PlayNow"]),
 		cdp.WaitReady(`button[data-testid="load-more"]`),
 		cdp.Evaluate(`document.querySelectorAll('button[data-testid="load-more"]').length`, &numLoadButtons),
@@ -75,11 +76,8 @@ func ScrapePlayNow(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFight
 	err := cdp.Run(ctx, clickButtons, getFighters)
 	if ctx.Err() == context.DeadlineExceeded {
 		cancel()
-		ScrapePlayNow(fights, fighters, opponents, wg)
-		return
+		ScrapePlayNow(fights, fighters, opponents)
 	}
 	if err != nil { panic(err) }
-
 	cancel()
-	wg.Done()
 }

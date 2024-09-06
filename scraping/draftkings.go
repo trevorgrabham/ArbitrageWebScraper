@@ -5,14 +5,14 @@ import (
 	"examples/webscraper/util"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 	"unicode/utf8"
 
+	"github.com/chromedp/cdproto/network"
 	cdp "github.com/chromedp/chromedp"
 )
 
-func ScrapeDraftKings(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents, wg *sync.WaitGroup) {
+func ScrapeDraftKings(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFighters, opponents *util.ThreadSafeOpponents) {
 	// Setup the driver
 	ctx, cancel := cdp.NewExecAllocator(
 		context.Background(),
@@ -26,6 +26,8 @@ func ScrapeDraftKings(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFi
 
 	var numFighters int 
 	tasks := cdp.Tasks{
+		network.Enable(),
+		network.SetExtraHTTPHeaders(network.Headers(util.Headers)),
 		cdp.Navigate(Urls["DraftKings"]),
 		cdp.WaitReady(`//tr/td[3]/div/div/div/div/div[2]/span`),
 		cdp.Evaluate(`document.querySelectorAll('span.sportsbook-odds.no-margin').length`, &numFighters),
@@ -79,13 +81,12 @@ func ScrapeDraftKings(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFi
 	err := cdp.Run(ctx, tasks)
 	if ctx.Err() == context.DeadlineExceeded {
 		cancel()
-		ScrapeDraftKings(fights, fighters, opponents, wg)
+		ScrapeDraftKings(fights, fighters, opponents)
 		return
 	}
 	if err != nil { panic(err) }
 	
 	cancel()
-	wg.Done()
 }
 
 func americanToDecimalOdds(isPositive bool, american float64) (decimal float64) {
