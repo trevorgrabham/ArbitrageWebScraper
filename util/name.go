@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -65,6 +66,9 @@ func NewName(name string) Name {
 	}
 	name = strings.ToLower(strings.TrimSpace(name))
 	mySplitName := strings.Split(name, " ")
+	mySplitName = slices.DeleteFunc(mySplitName, func(s string) bool {
+		return s == "jr" || s == "jr." || s == "jr " || s == "jr. "
+	})
 	var myName Name
 	if len(mySplitName) > 1 {
 		myName.FirstName = mySplitName[0]

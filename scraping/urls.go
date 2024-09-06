@@ -17,11 +17,11 @@ var Urls = map[string]string{
 }
 
 var Funcs []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *util.ThreadSafeOpponents, chan bool) = []func(*util.ThreadSafeFights, *util.ThreadSafeFighters, *util.ThreadSafeOpponents, chan bool){
-	// ScrapePlayNow,
-	// ScrapeDraftKings,
-	// ScrapeMGM,
-	// ScrapeTonyBet,
-	// ScrapeBet365,
+	ScrapePlayNow,
+	ScrapeDraftKings,
+	ScrapeMGM,
+	ScrapeTonyBet,
+	ScrapeBet365,
 	ScrapePinnacle,
 
 	// Getting blocked for some reason
