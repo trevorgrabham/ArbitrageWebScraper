@@ -30,6 +30,7 @@ func ScrapeDraftKings(fights *util.ThreadSafeFights, fighters *util.ThreadSafeFi
 		network.SetExtraHTTPHeaders(network.Headers(util.Headers)),
 		cdp.Navigate(Urls["DraftKings"]),
 		cdp.WaitReady(`//tr/td[3]/div/div/div/div/div[2]/span`),
+		cdp.Sleep(3*time.Second),
 		cdp.Evaluate(`document.querySelectorAll('span.sportsbook-odds.no-margin').length`, &numFighters),
 		cdp.ActionFunc(func(ctx context.Context) error {
 			for i := 0; i < numFighters-1; i += 2 {
